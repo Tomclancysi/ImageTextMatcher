@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ImageTextMatcher - Text to Image Retrieval</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="container">
+      <h1>Text-to-Image Retrieval</h1>
+      <form action="/search" method="post" class="search-form">
+        <input type="text" name="query" placeholder="Enter a text description..." required>
+        <input type="number" name="top_k" min="1" max="100" value="{{ current_top_k or 10 }}" />
+        <button type="submit">Search</button>
+      </form>
+    </div>
+  </body>
+</html>

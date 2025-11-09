@@ -1,0 +1,25 @@
+flask>=3.0.0
+transformers>=4.42.0
+torch>=2.2.0
+torchvision>=0.17.0
+Pillow>=10.0.0
+faiss-cpu>=1.7.4
+numpy>=1.26.0
+tqdm>=4.66.0
+PyYAML>=6.0.0
+
+# Text correction dependencies
+symspellpy>=6.7.7
+pyspellchecker>=0.7.2
+autocorrect>=2.6.1
+
+# Image download dependencies
+requests>=2.31.0
+tqdm>=4.66.0
+
+# Optional: CUDA runtime components for Windows via pip (use with torch cu12 wheel)
+# Install torch with CUDA separately from PyTorch index, e.g.:
+#   pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
+# nvidia-cublas-cu12>=12.1.3.1; platform_system=="Windows"
+# nvidia-cuda-runtime-cu12>=12.1.105; platform_system=="Windows"
+# nvidia-cudnn-cu12>=9.1.0.70; platform_system=="Windows"

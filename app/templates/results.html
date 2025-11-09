@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Search Results - ImageTextMatcher</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="container">
+      <h1>Search Results</h1>
+      <form action="/search" method="post" class="search-form">
+        <input type="text" name="query" placeholder="Enter a text description..." value="{{ query }}" required>
+        <input type="number" name="top_k" min="1" max="100" value="{{ current_top_k or 10 }}" />
+        <button type="submit">Search Again</button>
+        <a href="/" class="link">Back to Home</a>
+      </form>
+
+      {% if corrected_query and corrected_query != query %}
+      <div class="correction-info">
+        <p><strong>Query corrected:</strong> "{{ query }}" → "{{ corrected_query }}"</p>
+        {% if suggestions %}
+        <p><strong>Other suggestions:</strong> {{ suggestions|join(", ") }}</p>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if results and results|length > 0 %}
+      <div class="grid">
+        {% for item in results %}
+          <div class="card">
+            <div class="image">
+              <img src="/image?path={{ item.path }}" alt="result" />
+            </div>
+            <div class="meta">
+              <div class="path" title="{{ item.path }}">{{ item.path }}</div>
+              <div class="score">Similarity: {{ '%.4f'|format(item.score) }}</div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="hint">No results. Try another query or check whether the index is built.</p>
+      {% endif %}
+    </div>
+  </body>
+</html>
