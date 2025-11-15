@@ -12,6 +12,11 @@
       <form action="/search" method="post" class="search-form">
         <input type="text" name="query" placeholder="Enter a text description..." required>
         <input type="number" name="top_k" min="1" max="100" value="{{ current_top_k or 10 }}" />
+        <select name="method">
+          <option value="clip" {% if current_method == 'clip' %}selected{% endif %}>CLIP</option>
+          <option value="vse" {% if current_method == 'vse' %}selected{% endif %}>VSE++</option>
+          <option value="scan" {% if current_method == 'scan' %}selected{% endif %}>SCAN</option>
+        </select>
         <button type="submit">Search</button>
       </form>
     </div>

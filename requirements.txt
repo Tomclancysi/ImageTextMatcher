@@ -1,9 +1,10 @@
 flask>=3.0.0
-transformers>=4.42.0
-torch>=2.2.0
-torchvision>=0.17.0
+transformers>=4.42.0  # For CLIP, BERT (used in VSE++ and SCAN)
+safetensors>=0.4.0  # 用于安全加载模型权重（避免 torch 版本限制）
+torch>=2.2.0  # For CLIP, VSE++, SCAN (使用 safetensors 格式可避免版本限制)
+torchvision>=0.17.0  # For ResNet models (used in VSE++ and SCAN)
 Pillow>=10.0.0
-faiss-cpu>=1.7.4
+faiss-cpu>=1.7.4  # For CLIP and VSE++ indexing
 numpy>=1.26.0
 tqdm>=4.66.0
 PyYAML>=6.0.0

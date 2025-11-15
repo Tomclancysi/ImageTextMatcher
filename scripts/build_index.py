@@ -13,17 +13,25 @@ from app.services.index_service import IndexService
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build FAISS index for images using CLIP features")
+    parser = argparse.ArgumentParser(description="Build index for images using CLIP/VSE++/SCAN features")
     parser.add_argument("--image_root", default=os.path.join(os.getcwd(), "data", "images"))
     parser.add_argument("--index_dir", default=os.path.join(os.getcwd(), "data", "index"))
-    parser.add_argument("--model_name", default="openai/clip-vit-base-patch32")
+    parser.add_argument("--method", choices=["clip", "vse", "scan"], default="clip", 
+                       help="Matching method: clip, vse, or scan")
+    parser.add_argument("--model_name", default="openai/clip-vit-base-patch32", 
+                       help="Model name (only used for CLIP method)")
     parser.add_argument("--batch_size", type=int, default=32)
     args = parser.parse_args()
 
     os.makedirs(args.index_dir, exist_ok=True)
-    service = IndexService(image_root=args.image_root, index_dir=args.index_dir, model_name=args.model_name)
+    service = IndexService(
+        image_root=args.image_root, 
+        index_dir=args.index_dir, 
+        method=args.method,
+        model_name=args.model_name
+    )
     service.build_index(batch_size=args.batch_size)
-    print(f"Index built. Images: {len(service.meta)} -> {args.index_dir}")
+    print(f"Index built using {args.method.upper()} method. Images: {len(service.meta)} -> {args.index_dir}")
 
 
 if __name__ == "__main__":

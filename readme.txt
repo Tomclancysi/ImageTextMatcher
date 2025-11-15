@@ -47,7 +47,9 @@
 - Windows PowerShell：
    $env:ITM_IMAGE_ROOT="D:\\CodeWorks\\Pythons\\ImageTextMatcher\\data\\images"
    $env:ITM_INDEX_DIR="D:\\CodeWorks\\Pythons\\ImageTextMatcher\\data\\index"
+
    python -m app.main
+   
 - 浏览器访问：http://localhost:5000/
 - REST API 示例：
    GET /api/search?q=red%20car&k=10

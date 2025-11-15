@@ -12,9 +12,20 @@
       <form action="/search" method="post" class="search-form">
         <input type="text" name="query" placeholder="Enter a text description..." value="{{ query }}" required>
         <input type="number" name="top_k" min="1" max="100" value="{{ current_top_k or 10 }}" />
+        <select name="method">
+          <option value="clip" {% if method == 'clip' %}selected{% endif %}>CLIP</option>
+          <option value="vse" {% if method == 'vse' %}selected{% endif %}>VSE++</option>
+          <option value="scan" {% if method == 'scan' %}selected{% endif %}>SCAN</option>
+        </select>
         <button type="submit">Search Again</button>
         <a href="/" class="link">Back to Home</a>
       </form>
+      
+      {% if method %}
+      <div class="method-info">
+        <p><strong>Matching Method:</strong> {{ method.upper() }}</p>
+      </div>
+      {% endif %}
 
       {% if corrected_query and corrected_query != query %}
       <div class="correction-info">

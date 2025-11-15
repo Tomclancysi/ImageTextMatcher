@@ -16,7 +16,8 @@ class ClipService:
     def _ensure_loaded(self) -> None:
         if self._model is None or self._processor is None:
             self._processor = CLIPProcessor.from_pretrained(self.model_name)
-            self._model = CLIPModel.from_pretrained(self.model_name)
+            # 使用 safetensors 格式加载模型，避免 torch 版本限制
+            self._model = CLIPModel.from_pretrained(self.model_name, use_safetensors=True)
             self._model.eval()
             self._model.to(self.device)
 
