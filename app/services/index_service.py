@@ -18,6 +18,7 @@ class SearchResult:
     path: str
     score: float
     description: Optional[Dict] = None
+    vector_summary: Optional[List[float]] = None  # 向量摘要，用于可视化（采样64个维度）
 
 
 class IndexService:
@@ -145,7 +146,8 @@ class IndexService:
             results: List[SearchResult] = []
             for idx, score in indexed_scores[:top_k]:
                 description = self._get_image_description(self.meta[idx])
-                results.append(SearchResult(path=self.meta[idx], score=score, description=description))
+                vector_summary = self._get_vector_summary(idx)
+                results.append(SearchResult(path=self.meta[idx], score=score, description=description, vector_summary=vector_summary))
         else:
             # CLIP和VSE++方法：使用FAISS索引
             assert self.index is not None
@@ -157,7 +159,8 @@ class IndexService:
                 if idx == -1:
                     continue
                 description = self._get_image_description(self.meta[idx])
-                results.append(SearchResult(path=self.meta[idx], score=float(score), description=description))
+                vector_summary = self._get_vector_summary(idx)
+                results.append(SearchResult(path=self.meta[idx], score=float(score), description=description, vector_summary=vector_summary))
         
         return results
 
@@ -198,6 +201,98 @@ class IndexService:
         """根据图片路径获取描述"""
         filename = os.path.basename(image_path)
         return self.description_map.get(filename)
+    
+    def _normalize_vector_for_visualization(self, vector: np.ndarray, max_dims: int = 64) -> List[float]:
+        """将向量归一化并采样用于可视化"""
+        # 使用相对归一化：相对于该向量的最小值和最大值
+        # 这样可以更好地显示向量内部的相对差异
+        v_min = vector.min()
+        v_max = vector.max()
+        v_range = v_max - v_min
+        
+        if v_range > 1e-6:  # 避免除零
+            # 归一化到[0, 1]，保留相对差异
+            vector_normalized = (vector - v_min) / v_range
+        else:
+            # 如果所有值都相同，设为0.5（中性色）
+            vector_normalized = np.full_like(vector, 0.5)
+        
+        # 采样维度：如果维度太多，均匀采样
+        dim = len(vector_normalized)
+        if dim <= max_dims:
+            sampled = vector_normalized.tolist()
+        else:
+            # 均匀采样
+            indices = np.linspace(0, dim - 1, max_dims, dtype=int)
+            sampled = vector_normalized[indices].tolist()
+        
+        return sampled
+    
+    def _get_vector_summary(self, idx: int, max_dims: int = 64) -> Optional[List[float]]:
+        """获取图片向量的摘要用于可视化（采样部分维度）"""
+        try:
+            if self.method == "scan":
+                # SCAN方法：从区域特征中获取平均特征
+                if self.image_features is not None:
+                    # [num_regions, embed_size] -> [embed_size] (平均池化)
+                    region_features = self.image_features[idx]  # [num_regions, embed_size]
+                    vector = region_features.mean(dim=0).numpy()  # [embed_size]
+                else:
+                    return None
+            else:
+                # CLIP和VSE++方法：从FAISS索引中获取向量
+                if self.index is not None:
+                    vector = self.index.reconstruct(int(idx))  # [embed_size]
+                else:
+                    return None
+            
+            return self._normalize_vector_for_visualization(vector, max_dims)
+        except Exception as e:
+            print(f"Warning: Failed to get vector summary: {e}")
+            return None
+    
+    def _get_query_vector_summary(self, query: str, max_dims: int = 64) -> Optional[List[float]]:
+        """获取查询文本向量的摘要用于可视化"""
+        try:
+            text_emb = self.encoder.encode_texts([query])
+            
+            # 处理不同方法的文本特征格式
+            if self.method == "scan":
+                # SCAN方法：文本特征是多词特征 [batch, seq_len, embed_size]
+                if text_emb.dim() == 3:
+                    # 对序列维度求平均
+                    vector = text_emb[0].mean(dim=0).numpy()  # [embed_size]
+                elif text_emb.dim() == 2:
+                    vector = text_emb[0].numpy()  # [embed_size]
+                else:
+                    vector = text_emb.squeeze().numpy()
+            else:
+                # CLIP和VSE++方法：文本特征已经是单个向量 [batch, embed_size]
+                if text_emb.dim() == 2:
+                    vector = text_emb[0].numpy()  # [embed_size]
+                else:
+                    vector = text_emb.squeeze().numpy()
+            
+            # 确保是numpy数组
+            if not isinstance(vector, np.ndarray):
+                vector = np.array(vector)
+            
+            # 检查向量是否为空
+            if vector.size == 0:
+                print(f"Warning: Query vector is empty for query: {query}")
+                return None
+            
+            result = self._normalize_vector_for_visualization(vector, max_dims)
+            if not result or len(result) == 0:
+                print(f"Warning: Normalized vector is empty for query: {query}")
+                return None
+            
+            return result
+        except Exception as e:
+            print(f"Warning: Failed to get query vector summary: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     @staticmethod
     def _scan_images(root: str, recursive: bool) -> List[str]:

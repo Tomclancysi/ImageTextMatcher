@@ -36,6 +36,24 @@
       </div>
       {% endif %}
 
+      {% if query_vector_summary and query_vector_summary|length > 0 %}
+      <div class="query-vector-section">
+        <div class="query-vector-header">
+          <strong>Query Vector:</strong> "{{ corrected_query or query }}"
+        </div>
+        <div class="vector-visualization query-vector">
+          <div class="vector-label">Vector Encoding:</div>
+          <div class="vector-bar">
+            {% for val in query_vector_summary %}
+            <span class="vector-segment" style="background-color: {{ val|vector_to_color }};" title="Dim {{ loop.index }}: {{ '%.3f'|format(val) }}"></span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <!-- Debug: query_vector_summary is {{ query_vector_summary }} -->
+      {% endif %}
+
       {% if results and results|length > 0 %}
       <div class="grid">
         {% for item in results %}
@@ -47,6 +65,16 @@
             <div class="meta">
               <div class="filename" title="{{ item.path }}">{{ item.path|basename }}</div>
               <div class="score">Similarity: {{ '%.4f'|format(item.score) }}</div>
+              {% if item.vector_summary %}
+              <div class="vector-visualization">
+                <div class="vector-label">Vector:</div>
+                <div class="vector-bar">
+                  {% for val in item.vector_summary %}
+                  <span class="vector-segment" style="background-color: {{ val|vector_to_color }};" title="Dim {{ loop.index }}: {{ '%.3f'|format(val) }}"></span>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
               {% if item.description %}
               <div class="description">
                 {% if item.description.global_caption %}

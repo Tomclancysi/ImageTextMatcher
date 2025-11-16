@@ -21,6 +21,17 @@ def create_app() -> Flask:
     def basename_filter(path):
         return os.path.basename(path)
     
+    # 添加自定义过滤器：将向量值转换为颜色
+    @app.template_filter('vector_to_color')
+    def vector_to_color(val):
+        """将0-1的值转换为HSL颜色字符串"""
+        # 使用更鲜明的颜色映射：蓝色(0) -> 青色 -> 绿色 -> 黄色 -> 红色(1)
+        # 调整hue范围，使颜色变化更明显
+        hue = int((1 - val) * 240)  # 240(蓝) -> 0(红)
+        saturation = 80  # 提高饱和度，使颜色更鲜艳
+        lightness = int(40 + val * 20)  # 40-60，降低亮度使颜色更鲜明
+        return f"hsl({hue}, {saturation}%, {lightness}%)"
+    
     # 创建多个IndexService实例，支持不同方法
     app.config["INDEX_SERVICES"] = {
         "clip": IndexService(image_root=image_root, index_dir=index_dir, method="clip", model_name=model_name, dataset_csv=dataset_csv),
@@ -70,12 +81,14 @@ def create_app() -> Flask:
         
         index_service = get_index_service(method)
         results = index_service.search(query=corrected_query, top_k=session["top_k"])
+        query_vector_summary = index_service._get_query_vector_summary(corrected_query)
         
         return render_template("results.html", 
                              query=query, 
                              corrected_query=corrected_query,
                              suggestions=suggestions,
                              results=results, 
+                             query_vector_summary=query_vector_summary,
                              current_top_k=session["top_k"],
                              method=method)
 
@@ -111,7 +124,7 @@ def create_app() -> Flask:
             "suggestions": suggestions,
             "top_k": top_k,
             "method": method_arg,
-            "results": [{"path": r.path, "score": r.score, "description": r.description, "url": url_for("image", path=r.path)} for r in results],
+            "results": [{"path": r.path, "score": r.score, "description": r.description, "vector_summary": r.vector_summary, "url": url_for("image", path=r.path)} for r in results],
         })
 
     @app.get("/image")
