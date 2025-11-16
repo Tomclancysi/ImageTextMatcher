@@ -9,17 +9,23 @@ from .services.text_correction_service import TextCorrectionService
 def create_app() -> Flask:
     image_root = os.environ.get("ITM_IMAGE_ROOT", os.path.join(os.getcwd(), "data", "images"))
     index_dir = os.environ.get("ITM_INDEX_DIR", os.path.join(os.getcwd(), "data", "index"))
+    dataset_csv = os.environ.get("ITM_DATASET_CSV", os.path.join(os.getcwd(), "data", "dataset_en.csv"))
     model_name = os.environ.get("ITM_MODEL_NAME", "openai/clip-vit-base-patch32")
     default_method = os.environ.get("ITM_METHOD", "clip")
 
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
     
+    # 添加自定义过滤器：提取文件名
+    @app.template_filter('basename')
+    def basename_filter(path):
+        return os.path.basename(path)
+    
     # 创建多个IndexService实例，支持不同方法
     app.config["INDEX_SERVICES"] = {
-        "clip": IndexService(image_root=image_root, index_dir=index_dir, method="clip", model_name=model_name),
-        "vse": IndexService(image_root=image_root, index_dir=index_dir, method="vse", model_name=model_name),
-        "scan": IndexService(image_root=image_root, index_dir=index_dir, method="scan", model_name=model_name),
+        "clip": IndexService(image_root=image_root, index_dir=index_dir, method="clip", model_name=model_name, dataset_csv=dataset_csv),
+        "vse": IndexService(image_root=image_root, index_dir=index_dir, method="vse", model_name=model_name, dataset_csv=dataset_csv),
+        "scan": IndexService(image_root=image_root, index_dir=index_dir, method="scan", model_name=model_name, dataset_csv=dataset_csv),
     }
     app.config["DEFAULT_METHOD"] = default_method
     app.config["TEXT_CORRECTION_SERVICE"] = TextCorrectionService(language="en")
@@ -105,7 +111,7 @@ def create_app() -> Flask:
             "suggestions": suggestions,
             "top_k": top_k,
             "method": method_arg,
-            "results": [{"path": r.path, "score": r.score, "url": url_for("image", path=r.path)} for r in results],
+            "results": [{"path": r.path, "score": r.score, "description": r.description, "url": url_for("image", path=r.path)} for r in results],
         })
 
     @app.get("/image")

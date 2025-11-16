@@ -39,13 +39,34 @@
       {% if results and results|length > 0 %}
       <div class="grid">
         {% for item in results %}
-          <div class="card">
+          <div class="card {% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}">
             <div class="image">
+              <span class="rank-badge">{{ loop.index }}</span>
               <img src="/image?path={{ item.path }}" alt="result" />
             </div>
             <div class="meta">
-              <div class="path" title="{{ item.path }}">{{ item.path }}</div>
+              <div class="filename" title="{{ item.path }}">{{ item.path|basename }}</div>
               <div class="score">Similarity: {{ '%.4f'|format(item.score) }}</div>
+              {% if item.description %}
+              <div class="description">
+                {% if item.description.global_caption %}
+                <div class="global-caption">
+                  <strong>Global Caption:</strong>
+                  <p>{{ item.description.global_caption }}</p>
+                </div>
+                {% endif %}
+                {% if item.description.local_caption and item.description.local_caption|length > 0 %}
+                <div class="local-caption">
+                  <strong>Local Captions:</strong>
+                  <ul>
+                    {% for caption in item.description.local_caption %}
+                    <li>{{ caption }}</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+                {% endif %}
+              </div>
+              {% endif %}
             </div>
           </div>
         {% endfor %}

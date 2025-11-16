@@ -8,10 +8,22 @@
  .link{margin-left:8px}
  .correction-info{background:#e7f3ff;border:1px solid #b3d9ff;border-radius:6px;padding:12px;margin-bottom:16px}
  .correction-info p{margin:4px 0;font-size:14px}
- .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
- .card{border:1px solid #eee;border-radius:8px;overflow:hidden;background:#fff}
- .card .image{width:100%;height:180px;overflow:hidden;background:#fafafa;display:flex;align-items:center;justify-content:center}
- .card img{width:100%;height:100%;object-fit:cover}
- .card .meta{padding:8px}
- .card .path{font-size:12px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
- .card .score{font-size:12px;color:#0a7}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.card{border:1px solid #eee;border-radius:8px;overflow:hidden;background:#fff}
+.card .image{position:relative;width:100%;height:180px;overflow:hidden;background:#fafafa;display:flex;align-items:center;justify-content:center}
+.card img{width:100%;height:100%;object-fit:cover}
+.card .meta{padding:8px}
+.card .filename{font-size:12px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.card .score{font-size:12px;color:#0a7;margin-top:4px}
+.card .rank-badge{position:absolute;top:8px;right:8px;background:rgba(13,110,253,0.9);color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,0.3);line-height:1}
+.card.rank-1 .rank-badge{background:linear-gradient(135deg,#ffd700,#ffed4e);color:#333;width:36px;height:36px;font-size:16px;box-shadow:0 3px 8px rgba(255,215,0,0.5)}
+.card.rank-2 .rank-badge{background:linear-gradient(135deg,#c0c0c0,#e8e8e8);color:#333}
+.card.rank-3 .rank-badge{background:linear-gradient(135deg,#cd7f32,#daa06d);color:#fff}
+.card .description{margin-top:8px;padding-top:8px;border-top:1px solid #eee;font-size:11px}
+.card .description .global-caption{margin-bottom:8px}
+.card .description .global-caption strong{display:block;margin-bottom:4px;color:#555}
+.card .description .global-caption p{margin:0;color:#666;line-height:1.4;max-height:60px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.card .description .local-caption{margin-top:8px}
+.card .description .local-caption strong{display:block;margin-bottom:4px;color:#555}
+.card .description .local-caption ul{margin:0;padding-left:16px;color:#666;line-height:1.4}
+.card .description .local-caption li{margin-bottom:4px}

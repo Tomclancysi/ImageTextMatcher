@@ -18,6 +18,9 @@ autocorrect>=2.6.1
 requests>=2.31.0
 tqdm>=4.66.0
 
+# Translation dependencies
+deep-translator>=1.11.4
+
 # Optional: CUDA runtime components for Windows via pip (use with torch cu12 wheel)
 # Install torch with CUDA separately from PyTorch index, e.g.:
 #   pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
