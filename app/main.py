@@ -16,23 +16,18 @@ def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
     
-    # 添加自定义过滤器：提取文件名
     @app.template_filter('basename')
     def basename_filter(path):
         return os.path.basename(path)
     
-    # 添加自定义过滤器：将向量值转换为颜色
     @app.template_filter('vector_to_color')
     def vector_to_color(val):
         """将0-1的值转换为HSL颜色字符串"""
-        # 使用更鲜明的颜色映射：蓝色(0) -> 青色 -> 绿色 -> 黄色 -> 红色(1)
-        # 调整hue范围，使颜色变化更明显
-        hue = int((1 - val) * 240)  # 240(蓝) -> 0(红)
-        saturation = 80  # 提高饱和度，使颜色更鲜艳
-        lightness = int(40 + val * 20)  # 40-60，降低亮度使颜色更鲜明
+        hue = int((1 - val) * 240)
+        saturation = 80
+        lightness = int(40 + val * 20)
         return f"hsl({hue}, {saturation}%, {lightness}%)"
     
-    # 创建多个IndexService实例，支持不同方法
     app.config["INDEX_SERVICES"] = {
         "clip": IndexService(image_root=image_root, index_dir=index_dir, method="clip", model_name=model_name, dataset_csv=dataset_csv),
         "vse": IndexService(image_root=image_root, index_dir=index_dir, method="vse", model_name=model_name, dataset_csv=dataset_csv),
@@ -75,7 +70,6 @@ def create_app() -> Flask:
         if not query:
             return redirect(url_for("home"))
 
-        # Text correction
         correction_service: TextCorrectionService = app.config["TEXT_CORRECTION_SERVICE"]
         corrected_query, suggestions = correction_service.correct_text(query)
         
@@ -83,11 +77,11 @@ def create_app() -> Flask:
         results = index_service.search(query=corrected_query, top_k=session["top_k"])
         query_vector_summary = index_service._get_query_vector_summary(corrected_query)
         
-        return render_template("results.html", 
-                             query=query, 
+        return render_template("results.html",
+                             query=query,
                              corrected_query=corrected_query,
                              suggestions=suggestions,
-                             results=results, 
+                             results=results,
                              query_vector_summary=query_vector_summary,
                              current_top_k=session["top_k"],
                              method=method)
@@ -112,7 +106,6 @@ def create_app() -> Flask:
         if not query:
             return jsonify({"error": "missing q"}), 400
         
-        # Text correction for API
         correction_service: TextCorrectionService = app.config["TEXT_CORRECTION_SERVICE"]
         corrected_query, suggestions = correction_service.correct_text(query)
         
@@ -132,7 +125,6 @@ def create_app() -> Flask:
         image_path = request.args.get("path")
         if not image_path:
             abort(404)
-        # 使用默认服务获取image_root
         index_service = get_index_service()
         abs_root = os.path.abspath(index_service.image_root)
         abs_path = os.path.abspath(image_path)

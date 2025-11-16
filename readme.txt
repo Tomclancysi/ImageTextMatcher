@@ -71,3 +71,7 @@
 - 构建小规模领域数据集，进行轻量微调
 - 增强召回与排序，并加入拼写纠错、查询改写
 - 增加 Recall@K、MRR 与延迟监控的评测脚本
+
+
+10， 可视化图表
+python scripts/compare_methods.py --num_samples 3 --output comparison_results.png

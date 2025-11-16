@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Robust image downloader script for dataset.csv
 Features:
@@ -27,7 +26,7 @@ import json
 
 
 class ImageDownloader:
-    def __init__(self, 
+    def __init__(self,
                  output_dir: str = "data/images",
                  max_retries: int = 3,
                  timeout: int = 30,
@@ -41,7 +40,6 @@ class ImageDownloader:
         self.chunk_size = chunk_size
         self.resume_file = Path(resume_file)
         
-        # Setup logging
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
@@ -52,7 +50,6 @@ class ImageDownloader:
         )
         self.logger = logging.getLogger(__name__)
         
-        # Setup session with retry strategy
         self.session = requests.Session()
         retry_strategy = Retry(
             total=max_retries,
@@ -63,12 +60,10 @@ class ImageDownloader:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
         
-        # Load progress
         self.downloaded_urls: Set[str] = set()
         self.failed_urls: Set[str] = set()
         self.load_progress()
         
-        # Statistics
         self.stats = {
             'total': 0,
             'downloaded': 0,
@@ -107,11 +102,9 @@ class ImageDownloader:
         parsed = urlparse(url)
         filename = os.path.basename(parsed.path)
         
-        # If no extension, try to get from content-type or use default
         if not filename or '.' not in filename:
             filename = f"image_{hashlib.md5(url.encode()).hexdigest()[:8]}.jpg"
         
-        # Sanitize filename
         filename = "".join(c for c in filename if c.isalnum() or c in "._-")
         return filename
 
@@ -132,7 +125,7 @@ class ImageDownloader:
                 self.logger.debug(f"Downloading {url} (attempt {attempt + 1})")
                 
                 response = self.session.get(
-                    url, 
+                    url,
                     timeout=self.timeout,
                     stream=True,
                     headers={
@@ -141,12 +134,10 @@ class ImageDownloader:
                 )
                 response.raise_for_status()
                 
-                # Check content type
                 content_type = response.headers.get('content-type', '').lower()
                 if not any(img_type in content_type for img_type in ['image/', 'application/octet-stream']):
                     self.logger.warning(f"Unexpected content type for {url}: {content_type}")
                 
-                # Download with progress
                 total_size = int(response.headers.get('content-length', 0))
                 with open(output_path, 'wb') as f:
                     if total_size > 0:
@@ -160,7 +151,6 @@ class ImageDownloader:
                             if chunk:
                                 f.write(chunk)
                 
-                # Verify downloaded file
                 if output_path.exists() and output_path.stat().st_size > 0:
                     if self.is_valid_image(output_path):
                         self.logger.info(f"Successfully downloaded: {output_path.name}")
@@ -177,7 +167,7 @@ class ImageDownloader:
             except requests.exceptions.RequestException as e:
                 self.logger.warning(f"Attempt {attempt + 1} failed for {url}: {e}")
                 if attempt < self.max_retries:
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    time.sleep(2 ** attempt)
                 else:
                     self.logger.error(f"All attempts failed for {url}")
                     return False
@@ -200,18 +190,16 @@ class ImageDownloader:
         filename = self.get_filename_from_url(url)
         output_path = self.output_dir / filename
         
-        # Check if file already exists and is valid
         if output_path.exists() and self.is_valid_image(output_path):
             self.downloaded_urls.add(url)
             self.stats['skipped'] += 1
             return True
         
-        # Download the image
         success = self.download_image(url, output_path)
         
         if success:
             self.downloaded_urls.add(url)
-            self.failed_urls.discard(url)  # Remove from failed if it was there
+            self.failed_urls.discard(url)
             self.stats['downloaded'] += 1
         else:
             self.failed_urls.add(url)
@@ -239,14 +227,12 @@ class ImageDownloader:
         
         self.logger.info(f"Found {len(urls)} URLs to process")
         
-        # Process URLs with progress bar
         with tqdm(total=len(urls), desc="Downloading images") as pbar:
             for i, url in enumerate(urls[start_index:], start=start_index):
                 try:
                     self.process_url(url)
                     pbar.update(1)
                     
-                    # Save progress every 10 downloads
                     if (i + 1) % 10 == 0:
                         self.save_progress()
                         
@@ -257,7 +243,6 @@ class ImageDownloader:
                     self.logger.error(f"Error processing URL {url}: {e}")
                     continue
         
-        # Final save
         self.save_progress()
         self.print_stats()
 
@@ -288,12 +273,10 @@ def main():
     
     args = parser.parse_args()
     
-    # Check if CSV file exists
     if not os.path.exists(args.csv):
         print(f"Error: CSV file '{args.csv}' not found")
         sys.exit(1)
     
-    # Create downloader
     downloader = ImageDownloader(
         output_dir=args.output,
         max_retries=args.retries,

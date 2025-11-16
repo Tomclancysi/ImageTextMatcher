@@ -3,7 +3,6 @@ import os
 import sys
 from pathlib import Path
 
-# Ensure project root is on sys.path when running as a script
 CURRENT_FILE = Path(__file__).resolve()
 PROJECT_ROOT = CURRENT_FILE.parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -16,17 +15,17 @@ def main():
     parser = argparse.ArgumentParser(description="Build index for images using CLIP/VSE++/SCAN features")
     parser.add_argument("--image_root", default=os.path.join(os.getcwd(), "data", "images"))
     parser.add_argument("--index_dir", default=os.path.join(os.getcwd(), "data", "index"))
-    parser.add_argument("--method", choices=["clip", "vse", "scan"], default="clip", 
+    parser.add_argument("--method", choices=["clip", "vse", "scan"], default="clip",
                        help="Matching method: clip, vse, or scan")
-    parser.add_argument("--model_name", default="openai/clip-vit-base-patch32", 
+    parser.add_argument("--model_name", default="openai/clip-vit-base-patch32",
                        help="Model name (only used for CLIP method)")
     parser.add_argument("--batch_size", type=int, default=32)
     args = parser.parse_args()
 
     os.makedirs(args.index_dir, exist_ok=True)
     service = IndexService(
-        image_root=args.image_root, 
-        index_dir=args.index_dir, 
+        image_root=args.image_root,
+        index_dir=args.index_dir,
         method=args.method,
         model_name=args.model_name
     )

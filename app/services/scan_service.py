@@ -14,13 +14,11 @@ class ImageRegionEncoder(nn.Module):
     def __init__(self, embed_size: int = 1024):
         super().__init__()
         import torchvision.models as models
-        # 使用ResNet-101提取特征
         resnet = models.resnet101(pretrained=True)
-        modules = list(resnet.children())[:-2]  # 保留到conv层
+        modules = list(resnet.children())[:-2]
         self.resnet = nn.Sequential(*modules)
-        self.linear = nn.Linear(2048, embed_size)  # ResNet-101的通道数是2048
+        self.linear = nn.Linear(2048, embed_size)
         
-        # 冻结ResNet参数
         for param in self.resnet.parameters():
             param.requires_grad = False
     
@@ -32,23 +30,16 @@ class ImageRegionEncoder(nn.Module):
             features: [batch_size, num_regions, embed_size]
         """
         with torch.no_grad():
-            # 提取特征图
-            features = self.resnet(images)  # [batch, 2048, H', W']
+            features = self.resnet(images)
             batch_size, channels, height, width = features.size()
             
-            # 将特征图重塑为区域特征
-            # 使用全局平均池化 + 空间特征
-            # 方法1: 全局池化
             global_feat = F.adaptive_avg_pool2d(features, (1, 1)).view(batch_size, channels, -1)
-            # 方法2: 空间池化（将特征图分成网格）
             spatial_feat = F.adaptive_avg_pool2d(features, (7, 7)).view(batch_size, channels, -1)
             
-            # 合并全局和空间特征
-            combined = torch.cat([global_feat, spatial_feat], dim=2)  # [batch, channels, 1+49=50]
-            combined = combined.permute(0, 2, 1)  # [batch, 50, channels]
+            combined = torch.cat([global_feat, spatial_feat], dim=2)
+            combined = combined.permute(0, 2, 1)
             
-            # 投影到embed_size
-            features = self.linear(combined)  # [batch, 50, embed_size]
+            features = self.linear(combined)
         
         return features
 
@@ -61,14 +52,12 @@ class TextWordEncoder(nn.Module):
         self.embed_size = embed_size
         
         if use_bert:
-            # 使用BERT提取词汇级特征（使用 safetensors 格式避免 torch 版本限制）
             self.bert = AutoModel.from_pretrained('bert-base-uncased', use_safetensors=True)
             bert_dim = self.bert.config.hidden_size
             self.linear = nn.Linear(bert_dim, embed_size)
         else:
-            # 使用Bi-GRU
-            self.embed = nn.Embedding(30522, 300)  # 假设词汇表大小
-            self.gru = nn.GRU(300, embed_size // 2, num_layers=1, 
+            self.embed = nn.Embedding(30522, 300)
+            self.gru = nn.GRU(300, embed_size // 2, num_layers=1,
                             batch_first=True, bidirectional=True)
     
     def forward(self, x: torch.Tensor, lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -80,12 +69,10 @@ class TextWordEncoder(nn.Module):
             features: [batch_size, seq_len, embed_size]
         """
         if self.use_bert:
-            # BERT编码，保留所有token的表示
             outputs = self.bert(x['input_ids'], attention_mask=x['attention_mask'])
-            word_features = outputs.last_hidden_state  # [batch, seq_len, bert_dim]
-            word_features = self.linear(word_features)  # [batch, seq_len, embed_size]
+            word_features = outputs.last_hidden_state
+            word_features = self.linear(word_features)
         else:
-            # Bi-GRU编码
             embedded = self.embed(x)
             if lengths is not None:
                 embedded = nn.utils.rnn.pack_padded_sequence(embedded, lengths, batch_first=True, enforce_sorted=False)
@@ -105,7 +92,7 @@ class CrossAttention(nn.Module):
         self.W = nn.Linear(embed_size, embed_size)
         self.v = nn.Linear(embed_size, 1)
     
-    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, 
+    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor,
                 mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """计算交叉注意力
         Args:
@@ -117,21 +104,17 @@ class CrossAttention(nn.Module):
             attended: [batch, query_len, embed_size]
             attention_weights: [batch, query_len, key_len]
         """
-        # 计算注意力分数
-        query_proj = self.W(query)  # [batch, query_len, embed_size]
-        scores = torch.bmm(query_proj, key.transpose(1, 2))  # [batch, query_len, key_len]
-        scores = scores / (self.embed_size ** 0.5)  # 缩放
+        query_proj = self.W(query)
+        scores = torch.bmm(query_proj, key.transpose(1, 2))
+        scores = scores / (self.embed_size ** 0.5)
         
-        # 应用掩码
         if mask is not None:
-            mask = mask.unsqueeze(1)  # [batch, 1, key_len]
+            mask = mask.unsqueeze(1)
             scores = scores.masked_fill(mask == 0, float('-inf'))
         
-        # Softmax
-        attention_weights = F.softmax(scores, dim=2)  # [batch, query_len, key_len]
+        attention_weights = F.softmax(scores, dim=2)
         
-        # 加权求和
-        attended = torch.bmm(attention_weights, value)  # [batch, query_len, embed_size]
+        attended = torch.bmm(attention_weights, value)
         
         return attended, attention_weights
 
@@ -143,21 +126,17 @@ class SCANService:
         self.use_bert = use_bert
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         
-        # 初始化编码器
         self.image_encoder = ImageRegionEncoder(embed_size=embed_size).to(self.device)
         self.text_encoder = TextWordEncoder(embed_size=embed_size, use_bert=use_bert).to(self.device)
         
-        # 交叉注意力模块
         self.image_to_text_attention = CrossAttention(embed_size=embed_size).to(self.device)
         self.text_to_image_attention = CrossAttention(embed_size=embed_size).to(self.device)
         
-        # 设置评估模式
         self.image_encoder.eval()
         self.text_encoder.eval()
         self.image_to_text_attention.eval()
         self.text_to_image_attention.eval()
         
-        # 图像预处理
         self.image_transform = transforms.Compose([
             transforms.Resize((256, 256)),
             transforms.CenterCrop(224),
@@ -165,7 +144,6 @@ class SCANService:
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         
-        # 文本tokenizer（tokenizer 不需要 safetensors，但为了一致性也添加参数）
         if use_bert:
             self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     
@@ -183,11 +161,9 @@ class SCANService:
                     img = self.image_transform(img)
                     images.append(img)
                 except Exception as e:
-                    # 如果图像加载失败，使用零向量
                     images.append(torch.zeros(3, 224, 224))
             
             images_tensor = torch.stack(images).to(self.device)
-            # 返回区域特征 [batch, num_regions, embed_size]
             features = self.image_encoder(images_tensor)
             embeds.append(features.detach().cpu())
         
@@ -210,7 +186,6 @@ class SCANService:
                     max_length=77
                 )
                 encoded = {k: v.to(self.device) for k, v in encoded.items()}
-                # 返回词汇特征 [batch, seq_len, embed_size]
                 features = self.text_encoder(encoded, lengths=None)
             else:
                 raise NotImplementedError("GRU编码器需要词汇表，请使用BERT模式")
@@ -228,38 +203,32 @@ class SCANService:
         Returns:
             similarity_scores: [batch] 相似度分数
         """
-        # 如果输入是2D，扩展为3D
         if len(image_features.shape) == 2:
-            image_features = image_features.unsqueeze(1)  # [batch, 1, embed_size]
+            image_features = image_features.unsqueeze(1)
         if len(text_features.shape) == 2:
-            text_features = text_features.unsqueeze(1)  # [batch, 1, embed_size]
+            text_features = text_features.unsqueeze(1)
         
         image_features = image_features.to(self.device)
         text_features = text_features.to(self.device)
         
-        # 计算交叉注意力
-        # Image-to-Text: 图像区域关注文本词汇
         img_attended, _ = self.image_to_text_attention(
             query=image_features,
             key=text_features,
             value=text_features
         )
         
-        # Text-to-Image: 文本词汇关注图像区域
         txt_attended, _ = self.text_to_image_attention(
             query=text_features,
             key=image_features,
             value=image_features
         )
         
-        # 聚合特征：使用平均池化
-        img_agg = img_attended.mean(dim=1)  # [batch, embed_size]
-        txt_agg = txt_attended.mean(dim=1)  # [batch, embed_size]
+        img_agg = img_attended.mean(dim=1)
+        txt_agg = txt_attended.mean(dim=1)
         
-        # 计算余弦相似度
         img_agg = F.normalize(img_agg, p=2, dim=1)
         txt_agg = F.normalize(txt_agg, p=2, dim=1)
-        similarity = (img_agg * txt_agg).sum(dim=1)  # [batch]
+        similarity = (img_agg * txt_agg).sum(dim=1)
         
         return similarity.cpu()
     

@@ -21,6 +21,11 @@ tqdm>=4.66.0
 # Translation dependencies
 deep-translator>=1.11.4
 
+# Visualization dependencies
+matplotlib>=3.7.0
+pandas>=2.0.0
+tabulate>=0.9.0
+
 # Optional: CUDA runtime components for Windows via pip (use with torch cu12 wheel)
 # Install torch with CUDA separately from PyTorch index, e.g.:
 #   pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision

@@ -4,7 +4,7 @@ import csv
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict
 
-import faiss  # type: ignore
+import faiss
 import numpy as np
 import torch
 
@@ -18,18 +18,17 @@ class SearchResult:
     path: str
     score: float
     description: Optional[Dict] = None
-    vector_summary: Optional[List[float]] = None  # 向量摘要，用于可视化（采样64个维度）
+    vector_summary: Optional[List[float]] = None
 
 
 class IndexService:
-    def __init__(self, image_root: str, index_dir: str, 
+    def __init__(self, image_root: str, index_dir: str,
                  method: str = "clip", model_name: str = "openai/clip-vit-base-patch32",
                  dataset_csv: Optional[str] = None) -> None:
         self.image_root = os.path.abspath(image_root)
         self.index_dir = os.path.abspath(index_dir)
         self.method = method.lower()
         
-        # 根据方法选择编码服务
         if self.method == "clip":
             self.encoder = ClipService(model_name=model_name)
         elif self.method == "vse":
@@ -41,10 +40,8 @@ class IndexService:
         
         self.index: Optional[faiss.Index] = None
         self.meta: List[str] = []
-        # SCAN方法需要存储图像特征（区域特征）
         self.image_features: Optional[torch.Tensor] = None
         
-        # 加载数据集描述映射（图片文件名 -> 描述JSON）
         self.description_map: Dict[str, Dict] = {}
         if dataset_csv:
             self._load_dataset_descriptions(dataset_csv)
@@ -55,7 +52,7 @@ class IndexService:
         return (
             os.path.join(self.index_dir, f"{method_prefix}_image.index"),
             os.path.join(self.index_dir, f"{method_prefix}_meta.json"),
-            os.path.join(self.index_dir, f"{method_prefix}_image_features.pt"),  # 用于SCAN
+            os.path.join(self.index_dir, f"{method_prefix}_image_features.pt"),
         )
 
     def build_index(self, batch_size: int = 32, recursive: bool = True) -> None:
@@ -64,21 +61,17 @@ class IndexService:
         if not paths:
             raise RuntimeError(f"No images found under {self.image_root}")
 
-        # 编码图像
         if self.method == "scan":
-            # SCAN方法：存储区域特征
             image_features = self.encoder.encode_images(paths, batch_size=batch_size)
             self.image_features = image_features
             
-            # 对于SCAN，不构建FAISS索引，直接存储特征
             index_path, meta_path, features_path = self._index_paths()
             torch.save(image_features, features_path)
             with open(meta_path, "w", encoding="utf-8") as f:
                 json.dump({"image_paths": paths, "method": self.method}, f, ensure_ascii=False, indent=2)
         else:
-            # CLIP和VSE++方法：构建FAISS索引
             emb = self.encoder.encode_images(paths, batch_size=batch_size).numpy().astype(np.float32)
-            index = faiss.IndexFlatIP(emb.shape[1])  # cosine on normalized vectors
+            index = faiss.IndexFlatIP(emb.shape[1])
             index.add(emb)
 
             index_path, meta_path, features_path = self._index_paths()
@@ -104,13 +97,10 @@ class IndexService:
                 raise ValueError(f"Index was built with method '{stored_method}', but current method is '{self.method}'")
         
         if self.method == "scan":
-            # 加载SCAN图像特征
             if not os.path.exists(features_path):
                 raise FileNotFoundError("Image features file not found.")
-            # 使用 weights_only=True 安全加载（仅用于加载特征张量，非模型权重）
             self.image_features = torch.load(features_path, map_location="cpu", weights_only=True)
         else:
-            # 加载FAISS索引
             if not os.path.exists(index_path):
                 raise FileNotFoundError("Index file not found.")
             self.index = faiss.read_index(index_path)
@@ -128,18 +118,15 @@ class IndexService:
         top_k = min(top_k, len(self.meta))
         
         if self.method == "scan":
-            # SCAN方法：使用交叉注意力计算相似度
             assert self.image_features is not None
-            text_features = self.encoder.encode_texts([query])  # [1, seq_len, embed_size]
+            text_features = self.encoder.encode_texts([query])
             
-            # 计算每个图像与查询文本的相似度
             scores_list = []
             for i in range(len(self.meta)):
-                img_feat = self.image_features[i:i+1]  # [1, num_regions, embed_size]
+                img_feat = self.image_features[i:i+1]
                 similarity = self.encoder.compute_similarity(img_feat, text_features)
                 scores_list.append(float(similarity[0]))
             
-            # 排序并取top_k
             indexed_scores = [(i, score) for i, score in enumerate(scores_list)]
             indexed_scores.sort(key=lambda x: x[1], reverse=True)
             
@@ -149,7 +136,6 @@ class IndexService:
                 vector_summary = self._get_vector_summary(idx)
                 results.append(SearchResult(path=self.meta[idx], score=score, description=description, vector_summary=vector_summary))
         else:
-            # CLIP和VSE++方法：使用FAISS索引
             assert self.index is not None
             text_emb = self.encoder.encode_texts([query])
             query_vec = text_emb.numpy().astype(np.float32)
@@ -177,16 +163,12 @@ class IndexService:
                     url = row.get('url', '')
                     cap_seg = row.get('cap_seg', '')
                     
-                    # 从URL中提取图片文件名
                     if url:
                         filename = os.path.basename(url)
                         if filename and cap_seg:
-                            # 解析JSON描述（处理CSV中的双引号转义）
                             try:
-                                # 尝试直接解析
                                 description = json.loads(cap_seg)
                             except json.JSONDecodeError:
-                                # 如果失败，尝试修复双引号转义
                                 try:
                                     fixed_str = cap_seg.replace('""', '"')
                                     description = json.loads(fixed_str)
@@ -204,25 +186,19 @@ class IndexService:
     
     def _normalize_vector_for_visualization(self, vector: np.ndarray, max_dims: int = 64) -> List[float]:
         """将向量归一化并采样用于可视化"""
-        # 使用相对归一化：相对于该向量的最小值和最大值
-        # 这样可以更好地显示向量内部的相对差异
         v_min = vector.min()
         v_max = vector.max()
         v_range = v_max - v_min
         
-        if v_range > 1e-6:  # 避免除零
-            # 归一化到[0, 1]，保留相对差异
+        if v_range > 1e-6:
             vector_normalized = (vector - v_min) / v_range
         else:
-            # 如果所有值都相同，设为0.5（中性色）
             vector_normalized = np.full_like(vector, 0.5)
         
-        # 采样维度：如果维度太多，均匀采样
         dim = len(vector_normalized)
         if dim <= max_dims:
             sampled = vector_normalized.tolist()
         else:
-            # 均匀采样
             indices = np.linspace(0, dim - 1, max_dims, dtype=int)
             sampled = vector_normalized[indices].tolist()
         
@@ -232,17 +208,14 @@ class IndexService:
         """获取图片向量的摘要用于可视化（采样部分维度）"""
         try:
             if self.method == "scan":
-                # SCAN方法：从区域特征中获取平均特征
                 if self.image_features is not None:
-                    # [num_regions, embed_size] -> [embed_size] (平均池化)
-                    region_features = self.image_features[idx]  # [num_regions, embed_size]
-                    vector = region_features.mean(dim=0).numpy()  # [embed_size]
+                    region_features = self.image_features[idx]
+                    vector = region_features.mean(dim=0).numpy()
                 else:
                     return None
             else:
-                # CLIP和VSE++方法：从FAISS索引中获取向量
                 if self.index is not None:
-                    vector = self.index.reconstruct(int(idx))  # [embed_size]
+                    vector = self.index.reconstruct(int(idx))
                 else:
                     return None
             
@@ -256,28 +229,22 @@ class IndexService:
         try:
             text_emb = self.encoder.encode_texts([query])
             
-            # 处理不同方法的文本特征格式
             if self.method == "scan":
-                # SCAN方法：文本特征是多词特征 [batch, seq_len, embed_size]
                 if text_emb.dim() == 3:
-                    # 对序列维度求平均
-                    vector = text_emb[0].mean(dim=0).numpy()  # [embed_size]
+                    vector = text_emb[0].mean(dim=0).numpy()
                 elif text_emb.dim() == 2:
-                    vector = text_emb[0].numpy()  # [embed_size]
+                    vector = text_emb[0].numpy()
                 else:
                     vector = text_emb.squeeze().numpy()
             else:
-                # CLIP和VSE++方法：文本特征已经是单个向量 [batch, embed_size]
                 if text_emb.dim() == 2:
-                    vector = text_emb[0].numpy()  # [embed_size]
+                    vector = text_emb[0].numpy()
                 else:
                     vector = text_emb.squeeze().numpy()
             
-            # 确保是numpy数组
             if not isinstance(vector, np.ndarray):
                 vector = np.array(vector)
             
-            # 检查向量是否为空
             if vector.size == 0:
                 print(f"Warning: Query vector is empty for query: {query}")
                 return None

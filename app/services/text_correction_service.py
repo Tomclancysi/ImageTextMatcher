@@ -11,16 +11,12 @@ class TextCorrectionService:
         self.speller = Speller(lang=language)
         self.spell_checker = SpellChecker(language=language)
         
-        # Initialize SymSpell for more advanced correction
         self.sym_spell = SymSpell(max_dictionary_edit_distance=2, prefix_length=7)
         
-        # Load dictionary (you can provide your own dictionary file)
-        # For now, we'll use the built-in dictionary
         try:
             dictionary_path = "frequency_dictionary_en_82_765.txt"
             self.sym_spell.load_dictionary(dictionary_path, term_index=0, count_index=1)
         except FileNotFoundError:
-            # Fallback to basic spell checking
             self.sym_spell = None
 
     def correct_text(self, text: str, max_suggestions: int = 3) -> Tuple[str, List[str]]:
@@ -37,7 +33,6 @@ class TextCorrectionService:
         if not text or not text.strip():
             return text, []
         
-        # Clean and tokenize text
         words = self._tokenize(text)
         corrected_words = []
         suggestions = []
@@ -56,40 +51,34 @@ class TextCorrectionService:
 
     def _tokenize(self, text: str) -> List[str]:
         """Tokenize text while preserving punctuation."""
-        # Simple tokenization that preserves punctuation
         return re.findall(r'\b\w+\b|[^\w\s]', text)
 
     def _is_valid_word(self, word: str) -> bool:
         """Check if word is valid for correction."""
-        return (len(word) > 1 and 
-                word.isalpha() and 
-                not word.isupper() and  # Skip acronyms
-                len(word) > 2)  # Skip very short words
+        return (len(word) > 1 and
+                word.isalpha() and
+                not word.isupper() and
+                len(word) > 2)
 
     def _correct_word(self, word: str, max_suggestions: int) -> Tuple[str, List[str]]:
         """Correct a single word and return suggestions."""
         word_lower = word.lower()
         
-        # Check if word is already correct
         if word_lower in self.spell_checker:
             return word, []
         
-        # Get suggestions using multiple methods
         suggestions = []
         
-        # Method 1: SymSpell (if available)
         if self.sym_spell:
             sym_suggestions = self.sym_spell.lookup(word_lower, Verbosity.CLOSEST, max_edit_distance=2)
             if sym_suggestions:
                 suggestions.extend([s.term for s in sym_suggestions[:max_suggestions]])
         
-        # Method 2: SpellChecker
         if not suggestions:
             spell_suggestions = self.spell_checker.candidates(word_lower)
             if spell_suggestions:
                 suggestions.extend(list(spell_suggestions)[:max_suggestions])
         
-        # Method 3: Autocorrect
         if not suggestions:
             try:
                 corrected = self.speller(word_lower)
@@ -98,7 +87,6 @@ class TextCorrectionService:
             except:
                 pass
         
-        # Return the best suggestion or original word
         if suggestions:
             return suggestions[0], suggestions[:max_suggestions]
         else:
@@ -109,7 +97,6 @@ class TextCorrectionService:
         result = original_text
         for orig, corr in zip(original_words, corrected_words):
             if orig != corr:
-                # Replace word boundaries to avoid partial replacements
                 pattern = r'\b' + re.escape(orig) + r'\b'
                 result = re.sub(pattern, corr, result, count=1)
         return result
