@@ -3,22 +3,459 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ImageTextMatcher - Text to Image Retrieval</title>
+    <title>ImageTextMatcher</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
     <link rel="stylesheet" href="/static/styles.css">
   </head>
-  <body>
-    <div class="container">
-      <h1>Text-to-Image Retrieval</h1>
-      <form action="/search" method="post" class="search-form">
-        <input type="text" name="query" placeholder="Enter a text description..." required>
-        <input type="number" name="top_k" min="1" max="100" value="{{ current_top_k or 10 }}" />
-        <select name="method">
-          <option value="clip" {% if current_method == 'clip' %}selected{% endif %}>CLIP</option>
-          <option value="vse" {% if current_method == 'vse' %}selected{% endif %}>VSE++</option>
-          <option value="scan" {% if current_method == 'scan' %}selected{% endif %}>SCAN</option>
-        </select>
-        <button type="submit">Search</button>
-      </form>
+  <body class="itm-body">
+    <div id="app" v-cloak>
+      <div class="page-shell">
+        <header class="workspace-shell">
+          <section class="workspace-main">
+            <div class="workspace-head">
+              <div>
+                <p class="eyebrow">Semantic Retrieval Workspace</p>
+                <h1>ImageTextMatcher</h1>
+                <p class="workspace-copy">
+                  Search your image index with natural language, switch retrieval strategies,
+                  and compare model behavior from one workspace.
+                </p>
+              </div>
+              <div class="workspace-summary">
+                <div class="summary-pill">
+                  <span>Models</span>
+                  <strong>3</strong>
+                </div>
+                <div class="summary-pill">
+                  <span>Mode</span>
+                  <strong>[[ compareMode ? 'Compare' : 'Single' ]]</strong>
+                </div>
+              </div>
+            </div>
+
+            <section class="search-console">
+              <div class="search-grid">
+                <div class="query-field">
+                  <label class="field-label" for="query-input">Query</label>
+                  <el-input
+                    id="query-input"
+                    v-model="form.query"
+                    size="large"
+                    clearable
+                    placeholder="Describe the target scene, object, action, or attribute"
+                    @keyup.enter="submitSearch"
+                  ></el-input>
+                </div>
+
+                <div class="inline-controls">
+                  <div class="control-cell">
+                    <label class="field-label">Top K</label>
+                    <el-input-number
+                      v-model="form.topK"
+                      :min="1"
+                      :max="100"
+                      :step="1"
+                      size="large"
+                    ></el-input-number>
+                  </div>
+
+                  <div class="control-cell" v-if="!compareMode">
+                    <label class="field-label">Method</label>
+                    <el-select v-model="form.method" size="large">
+                      <el-option
+                        v-for="option in methods"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      ></el-option>
+                    </el-select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="toolbar-row">
+                <div class="mode-switch">
+                  <span class="field-label">View Mode</span>
+                  <el-radio-group v-model="viewMode" size="large">
+                    <el-radio-button label="single">Single</el-radio-button>
+                    <el-radio-button label="compare">Compare</el-radio-button>
+                  </el-radio-group>
+                </div>
+
+                <div class="primary-actions">
+                  <el-button type="primary" size="large" :loading="loading" @click="submitSearch">
+                    Search
+                  </el-button>
+                  <el-button size="large" plain @click="resetSearch">Reset</el-button>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <aside class="workspace-side">
+            <section class="side-card">
+              <div class="side-head">
+                <span class="eyebrow dark">Quick Actions</span>
+                <strong>Examples</strong>
+              </div>
+              <div class="tag-list">
+                <button
+                  v-for="item in quickExamples"
+                  :key="item"
+                  type="button"
+                  class="chip-button"
+                  @click="applyExample(item)"
+                >
+                  [[ item ]]
+                </button>
+              </div>
+            </section>
+
+            <section class="side-card">
+              <div class="side-head">
+                <span class="eyebrow dark">Recent Queries</span>
+                <strong>History</strong>
+              </div>
+              <div v-if="history.length" class="history-list">
+                <button
+                  v-for="item in history"
+                  :key="historyKey(item)"
+                  type="button"
+                  class="history-item"
+                  @click="applyHistory(item)"
+                >
+                  <span class="history-query">[[ item.query ]]</span>
+                  <small>[[ item.methodLabel ]] · Top [[ item.topK ]]</small>
+                </button>
+              </div>
+              <p v-else class="muted">Queries you run will appear here.</p>
+            </section>
+
+            <section class="side-card subtle">
+              <div class="side-head">
+                <span class="eyebrow dark">Inspector</span>
+                <strong>Advanced Data</strong>
+              </div>
+              <p class="muted compact">
+                Query vectors and full captions are available in the detail drawer so the
+                main result grid stays compact.
+              </p>
+            </section>
+          </aside>
+        </header>
+
+        <main class="content-shell">
+          <section class="status-bar" v-if="hasSearched || loading">
+            <div class="status-item">
+              <span>Status</span>
+              <strong>[[ loading ? 'Searching' : 'Ready' ]]</strong>
+            </div>
+            <div class="status-item" v-if="stats.totalResults !== null">
+              <span>Visible Results</span>
+              <strong>[[ stats.totalResults ]]</strong>
+            </div>
+            <div class="status-item" v-if="stats.durationMs !== null">
+              <span>Latency</span>
+              <strong>[[ stats.durationMs ]] ms</strong>
+            </div>
+            <div class="status-item">
+              <span>Scope</span>
+              <strong>[[ compareMode ? 'All Models' : methodLabel ]]</strong>
+            </div>
+          </section>
+
+          <el-alert
+            v-if="error"
+            class="feedback-panel"
+            type="error"
+            :closable="false"
+            :title="error"
+            show-icon
+          ></el-alert>
+
+          <section v-if="correction.visible" class="feedback-panel correction-panel">
+            <div class="feedback-head">
+              <strong>Spell correction applied</strong>
+              <span class="muted">Using corrected text for retrieval</span>
+            </div>
+            <p>
+              <span class="muted">Original:</span> [[ correction.original ]]
+              <span class="arrow">-&gt;</span>
+              <span class="muted">Corrected:</span> [[ correction.corrected ]]
+            </p>
+            <div class="tag-list" v-if="correction.suggestions.length">
+              <el-tag
+                v-for="item in correction.suggestions"
+                :key="item"
+                size="small"
+                effect="plain"
+                round
+              >
+                [[ item ]]
+              </el-tag>
+            </div>
+          </section>
+
+          <section class="result-toolbar" v-if="hasSearched && !loading">
+            <div class="toolbar-group">
+              <div class="filter-card">
+                <span class="field-label">Minimum Score</span>
+                <div class="slider-head">
+                  <strong>[[ scoreFloor.toFixed(3) ]]</strong>
+                  <small>[[ scoreStats.min.toFixed(3) ]] - [[ scoreStats.max.toFixed(3) ]]</small>
+                </div>
+                <el-slider
+                  v-model="scoreFloor"
+                  :min="scoreStats.min"
+                  :max="scoreStats.max"
+                  :step="0.001"
+                  :show-tooltip="false"
+                ></el-slider>
+              </div>
+
+              <div class="filter-card compact">
+                <span class="field-label">Display</span>
+                <el-switch
+                  v-model="showVectorPreview"
+                  inline-prompt
+                  active-text="Vector"
+                  inactive-text="Clean"
+                ></el-switch>
+                <el-switch
+                  v-model="showQueryVectorPanel"
+                  inline-prompt
+                  active-text="Query"
+                  inactive-text="Hide"
+                ></el-switch>
+              </div>
+            </div>
+
+            <div class="toolbar-meta">
+              <div class="meta-block">
+                <span class="field-label">Query</span>
+                <strong>[[ stats.query || '-' ]]</strong>
+              </div>
+              <div class="meta-block">
+                <span class="field-label">Corrected</span>
+                <strong>[[ stats.correctedQuery || '-' ]]</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="query-vector-panel" v-if="hasSearched && !loading && showQueryVectorPanel && queryVector.length">
+            <div class="panel-topline">
+              <strong>Query Vector Snapshot</strong>
+              <span class="muted">Sampled embedding dimensions for the current text query</span>
+            </div>
+            <div class="vector-bar large">
+              <span
+                v-for="(value, index) in queryVector"
+                :key="`query-${index}`"
+                class="vector-segment"
+                :style="{ background: vectorColor(value) }"
+                :title="`Dim ${index + 1}: ${Number(value).toFixed(3)}`"
+              ></span>
+            </div>
+          </section>
+
+          <section v-if="loading" class="results-grid">
+            <el-skeleton
+              v-for="item in skeletonCount"
+              :key="`skeleton-${item}`"
+              animated
+              class="result-card skeleton-card"
+            >
+              <template #template>
+                <div class="skeleton-image"></div>
+                <div class="skeleton-copy">
+                  <el-skeleton-item variant="h3" style="width: 60%;"></el-skeleton-item>
+                  <el-skeleton-item variant="text" style="width: 40%;"></el-skeleton-item>
+                  <el-skeleton-item variant="text" style="width: 92%;"></el-skeleton-item>
+                </div>
+              </template>
+            </el-skeleton>
+          </section>
+
+          <section v-else-if="hasSearched && compareMode" class="compare-grid">
+            <article v-for="column in compareColumns" :key="column.method" class="compare-column">
+              <div class="compare-head">
+                <div>
+                  <span class="eyebrow dark">Model</span>
+                  <h3>[[ column.label ]]</h3>
+                </div>
+                <div class="column-meta">
+                  <span>[[ column.durationMs !== null ? `${column.durationMs} ms` : '-' ]]</span>
+                  <strong>[[ column.visibleCount ]] shown</strong>
+                </div>
+              </div>
+
+              <div v-if="column.error" class="column-empty error-state">
+                [[ column.error ]]
+              </div>
+              <div v-else-if="!column.filteredResults.length" class="column-empty">
+                No results above the current threshold.
+              </div>
+              <div v-else class="column-list">
+                <article
+                  v-for="(item, index) in column.filteredResults"
+                  :key="`${column.method}-${item.path}`"
+                  class="result-card mini"
+                >
+                  <div class="result-image-wrap">
+                    <img :src="item.url" :alt="item.path" class="result-image" loading="lazy">
+                    <span class="rank-pill"># [[ index + 1 ]]</span>
+                  </div>
+                  <div class="result-body">
+                    <div class="result-topline">
+                      <strong class="filename">[[ basename(item.path) ]]</strong>
+                      <span class="score-pill">[[ item.score.toFixed(4) ]]</span>
+                    </div>
+                    <div class="result-meta">
+                      <span>[[ column.label ]]</span>
+                      <span>Similarity</span>
+                    </div>
+                    <div class="vector-bar" v-if="showVectorPreview && item.vector_summary && item.vector_summary.length">
+                      <span
+                        v-for="(value, vectorIndex) in item.vector_summary"
+                        :key="`${column.method}-${item.path}-${vectorIndex}`"
+                        class="vector-segment"
+                        :style="{ background: vectorColor(value) }"
+                      ></span>
+                    </div>
+                    <div class="card-actions">
+                      <el-button link type="primary" @click="openDetails(item, column.label)">
+                        View Details
+                      </el-button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </article>
+          </section>
+
+          <section v-else-if="hasSearched && displayedResults.length" class="results-grid">
+            <article
+              v-for="(item, index) in displayedResults"
+              :key="item.path"
+              class="result-card"
+              :class="{ featured: index === 0 }"
+            >
+              <div class="result-image-wrap">
+                <img :src="item.url" :alt="item.path" class="result-image" loading="lazy">
+                <span class="rank-pill"># [[ index + 1 ]]</span>
+              </div>
+
+              <div class="result-body">
+                <div class="result-topline">
+                  <strong class="filename">[[ basename(item.path) ]]</strong>
+                  <span class="score-pill">[[ item.score.toFixed(4) ]]</span>
+                </div>
+
+                <div class="result-meta">
+                  <span>[[ methodLabel ]]</span>
+                  <span>Similarity score</span>
+                </div>
+
+                <p class="card-summary">[[ summaryText(item) ]]</p>
+
+                <div class="vector-bar" v-if="showVectorPreview && item.vector_summary && item.vector_summary.length">
+                  <span
+                    v-for="(value, vectorIndex) in item.vector_summary"
+                    :key="`${item.path}-${vectorIndex}`"
+                    class="vector-segment"
+                    :style="{ background: vectorColor(value) }"
+                  ></span>
+                </div>
+
+                <div class="card-actions">
+                  <el-button link type="primary" @click="openDetails(item, methodLabel)">
+                    View Details
+                  </el-button>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <section v-else-if="hasSearched" class="empty-state">
+            <h3>No results matched the current filter</h3>
+            <p>Lower the score threshold or switch the retrieval mode.</p>
+          </section>
+
+          <section v-else class="empty-state initial-state">
+            <h3>Start with a natural language prompt</h3>
+            <p>Pick an example on the right or enter your own query above.</p>
+          </section>
+        </main>
+      </div>
+
+      <el-drawer
+        v-model="details.visible"
+        size="min(560px, 92vw)"
+        title="Result Details"
+        destroy-on-close
+      >
+        <div v-if="details.item" class="details-layout">
+          <img :src="details.item.url" :alt="details.item.path" class="details-image">
+          <div class="details-meta">
+            <div class="detail-row">
+              <span class="field-label">Source</span>
+              <strong>[[ details.sourceLabel ]]</strong>
+            </div>
+            <div class="detail-row">
+              <span class="field-label">File</span>
+              <strong>[[ basename(details.item.path) ]]</strong>
+            </div>
+            <div class="detail-row">
+              <span class="field-label">Score</span>
+              <strong>[[ details.item.score.toFixed(4) ]]</strong>
+            </div>
+            <div class="detail-row full">
+              <span class="field-label">Path</span>
+              <strong>[[ details.item.path ]]</strong>
+            </div>
+
+            <div class="detail-block" v-if="details.item.vector_summary && details.item.vector_summary.length">
+              <span class="field-label">Vector Preview</span>
+              <div class="vector-bar">
+                <span
+                  v-for="(value, index) in details.item.vector_summary"
+                  :key="`detail-${index}`"
+                  class="vector-segment"
+                  :style="{ background: vectorColor(value) }"
+                ></span>
+              </div>
+            </div>
+
+            <div class="detail-block" v-if="details.item.description && details.item.description.global_caption">
+              <span class="field-label">Global Caption</span>
+              <p>[[ details.item.description.global_caption ]]</p>
+            </div>
+
+            <div
+              class="detail-block"
+              v-if="details.item.description && details.item.description.local_caption && details.item.description.local_caption.length"
+            >
+              <span class="field-label">Local Captions</span>
+              <ul>
+                <li v-for="(caption, index) in details.item.description.local_caption" :key="index">
+                  [[ caption ]]
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </el-drawer>
     </div>
+
+    <script>
+      window.__ITM_CONFIG__ = {
+        initialQuery: {{ initial_query|tojson }},
+        currentTopK: {{ current_top_k|tojson }},
+        currentMethod: {{ current_method|tojson }}
+      };
+    </script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+    <script src="/static/app.js"></script>
   </body>
 </html>

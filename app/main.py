@@ -1,4 +1,5 @@
 import os
+from time import perf_counter
 
 from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for, abort, session
 
@@ -47,9 +48,25 @@ def create_app() -> Flask:
 
     @app.get("/")
     def home():
-        current_top_k = int(session.get("top_k", 10))
-        current_method = session.get("method", default_method)
-        return render_template("index.html", current_top_k=current_top_k, current_method=current_method)
+        try:
+            current_top_k = int(request.args.get("k", session.get("top_k", 10)))
+        except ValueError:
+            current_top_k = int(session.get("top_k", 10))
+
+        current_top_k = max(1, min(100, current_top_k))
+
+        current_method = request.args.get("method", session.get("method", default_method)).lower()
+        if current_method not in app.config["INDEX_SERVICES"]:
+            current_method = default_method
+
+        initial_query = request.args.get("q", "").strip()
+
+        return render_template(
+            "index.html",
+            current_top_k=current_top_k,
+            current_method=current_method,
+            initial_query=initial_query,
+        )
 
     @app.post("/search")
     def search():
@@ -70,21 +87,7 @@ def create_app() -> Flask:
         if not query:
             return redirect(url_for("home"))
 
-        correction_service: TextCorrectionService = app.config["TEXT_CORRECTION_SERVICE"]
-        corrected_query, suggestions = correction_service.correct_text(query)
-        
-        index_service = get_index_service(method)
-        results = index_service.search(query=corrected_query, top_k=session["top_k"])
-        query_vector_summary = index_service._get_query_vector_summary(corrected_query)
-        
-        return render_template("results.html",
-                             query=query,
-                             corrected_query=corrected_query,
-                             suggestions=suggestions,
-                             results=results,
-                             query_vector_summary=query_vector_summary,
-                             current_top_k=session["top_k"],
-                             method=method)
+        return redirect(url_for("home", q=query, k=session["top_k"], method=method))
 
     @app.get("/api/search")
     def api_search():
@@ -107,16 +110,21 @@ def create_app() -> Flask:
             return jsonify({"error": "missing q"}), 400
         
         correction_service: TextCorrectionService = app.config["TEXT_CORRECTION_SERVICE"]
+        started_at = perf_counter()
         corrected_query, suggestions = correction_service.correct_text(query)
-        
+
         index_service = get_index_service(method_arg)
         results = index_service.search(query=corrected_query, top_k=top_k)
+        query_vector_summary = index_service._get_query_vector_summary(corrected_query)
+        duration_ms = round((perf_counter() - started_at) * 1000, 2)
         return jsonify({
             "query": query,
             "corrected_query": corrected_query,
             "suggestions": suggestions,
             "top_k": top_k,
             "method": method_arg,
+            "query_vector_summary": query_vector_summary,
+            "duration_ms": duration_ms,
             "results": [{"path": r.path, "score": r.score, "description": r.description, "vector_summary": r.vector_summary, "url": url_for("image", path=r.path)} for r in results],
         })
 
