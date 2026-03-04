@@ -24,15 +24,17 @@ class SearchResult:
 class IndexService:
     def __init__(self, image_root: str, index_dir: str,
                  method: str = "clip", model_name: str = "openai/clip-vit-base-patch32",
-                 dataset_csv: Optional[str] = None) -> None:
+                 dataset_csv: Optional[str] = None,
+                 vse_checkpoint: Optional[str] = None) -> None:
         self.image_root = os.path.abspath(image_root)
         self.index_dir = os.path.abspath(index_dir)
         self.method = method.lower()
+        vse_checkpoint = vse_checkpoint or os.environ.get("ITM_VSE_CHECKPOINT")
         
         if self.method == "clip":
             self.encoder = ClipService(model_name=model_name)
         elif self.method == "vse":
-            self.encoder = VSEService(embed_size=1024, use_bert=True)
+            self.encoder = VSEService(embed_size=1024, use_bert=True, checkpoint_path=vse_checkpoint)
         elif self.method == "scan":
             self.encoder = SCANService(embed_size=1024, use_bert=True)
         else:

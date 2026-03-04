@@ -47,6 +47,7 @@
 - Windows PowerShell：
    $env:ITM_IMAGE_ROOT="D:\\CodeWorks\\Pythons\\ImageTextMatcher\\data\\images"
    $env:ITM_INDEX_DIR="D:\\CodeWorks\\Pythons\\ImageTextMatcher\\data\\index"
+   $env:ITM_DATASET_CSV="D:\CodeWorks\Pythons\ImageTextMatcher\data\dataset_5000.csv"
 
    python -m app.main
    

@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--model_name", default="openai/clip-vit-base-patch32",
                        help="Model name (only used for CLIP method)")
     parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--vse_checkpoint", help="Checkpoint path for a trained VSE++ model")
     args = parser.parse_args()
 
     os.makedirs(args.index_dir, exist_ok=True)
@@ -27,7 +28,8 @@ def main():
         image_root=args.image_root,
         index_dir=args.index_dir,
         method=args.method,
-        model_name=args.model_name
+        model_name=args.model_name,
+        vse_checkpoint=args.vse_checkpoint,
     )
     service.build_index(batch_size=args.batch_size)
     print(f"Index built using {args.method.upper()} method. Images: {len(service.meta)} -> {args.index_dir}")

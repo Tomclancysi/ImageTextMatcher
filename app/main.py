@@ -10,9 +10,10 @@ from .services.text_correction_service import TextCorrectionService
 def create_app() -> Flask:
     image_root = os.environ.get("ITM_IMAGE_ROOT", os.path.join(os.getcwd(), "data", "images"))
     index_dir = os.environ.get("ITM_INDEX_DIR", os.path.join(os.getcwd(), "data", "index"))
-    dataset_csv = os.environ.get("ITM_DATASET_CSV", os.path.join(os.getcwd(), "data", "dataset_en.csv"))
+    dataset_csv = os.environ.get("ITM_DATASET_CSV", os.path.join(os.getcwd(), "data", "dataset_5000.csv"))
     model_name = os.environ.get("ITM_MODEL_NAME", "openai/clip-vit-base-patch32")
     default_method = os.environ.get("ITM_METHOD", "clip")
+    vse_checkpoint = os.environ.get("ITM_VSE_CHECKPOINT", "data/checkpoints/vse_best.pt")
 
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
@@ -31,7 +32,14 @@ def create_app() -> Flask:
     
     app.config["INDEX_SERVICES"] = {
         "clip": IndexService(image_root=image_root, index_dir=index_dir, method="clip", model_name=model_name, dataset_csv=dataset_csv),
-        "vse": IndexService(image_root=image_root, index_dir=index_dir, method="vse", model_name=model_name, dataset_csv=dataset_csv),
+        "vse": IndexService(
+            image_root=image_root,
+            index_dir=index_dir,
+            method="vse",
+            model_name=model_name,
+            dataset_csv=dataset_csv,
+            vse_checkpoint=vse_checkpoint,
+        ),
         "scan": IndexService(image_root=image_root, index_dir=index_dir, method="scan", model_name=model_name, dataset_csv=dataset_csv),
     }
     app.config["DEFAULT_METHOD"] = default_method
