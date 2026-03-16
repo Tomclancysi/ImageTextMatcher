@@ -42,6 +42,8 @@
    python scripts/build_index.py
 - 方式二（自定义路径）：
    python scripts/build_index.py --image_root D:\\images --index_dir D:\\index
+   python scripts/build_index.py --method clip --image_root data/images --index_dir data/index --model_name "openai/clip-vit-large-patch14" --model_dtype "fp16" --batch_size 16
+
 
 六、运行服务
 - Windows PowerShell：

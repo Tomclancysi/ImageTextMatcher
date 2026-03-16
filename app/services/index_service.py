@@ -25,14 +25,17 @@ class IndexService:
     def __init__(self, image_root: str, index_dir: str,
                  method: str = "clip", model_name: str = "openai/clip-vit-base-patch32",
                  dataset_csv: Optional[str] = None,
-                 vse_checkpoint: Optional[str] = None) -> None:
+                 vse_checkpoint: Optional[str] = None,
+                 model_dtype: Optional[str] = None) -> None:
         self.image_root = os.path.abspath(image_root)
         self.index_dir = os.path.abspath(index_dir)
         self.method = method.lower()
+        self.model_name = model_name
         vse_checkpoint = vse_checkpoint or os.environ.get("ITM_VSE_CHECKPOINT")
-        
+        model_dtype = model_dtype or os.environ.get("ITM_MODEL_DTYPE")
+
         if self.method == "clip":
-            self.encoder = ClipService(model_name=model_name)
+            self.encoder = ClipService(model_name=model_name, torch_dtype=model_dtype)
         elif self.method == "vse":
             self.encoder = VSEService(embed_size=1024, use_bert=True, checkpoint_path=vse_checkpoint)
         elif self.method == "scan":
@@ -70,7 +73,11 @@ class IndexService:
             index_path, meta_path, features_path = self._index_paths()
             torch.save(image_features, features_path)
             with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump({"image_paths": paths, "method": self.method}, f, ensure_ascii=False, indent=2)
+                json.dump({
+                    "image_paths": paths,
+                    "method": self.method,
+                    "model_name": None,
+                }, f, ensure_ascii=False, indent=2)
         else:
             emb = self.encoder.encode_images(paths, batch_size=batch_size).numpy().astype(np.float32)
             index = faiss.IndexFlatIP(emb.shape[1])
@@ -79,7 +86,12 @@ class IndexService:
             index_path, meta_path, features_path = self._index_paths()
             faiss.write_index(index, index_path)
             with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump({"image_paths": paths, "method": self.method}, f, ensure_ascii=False, indent=2)
+                json.dump({
+                    "image_paths": paths,
+                    "method": self.method,
+                    "model_name": self.model_name if hasattr(self, "model_name") else None,
+                    "feature_dim": int(emb.shape[1]),
+                }, f, ensure_ascii=False, indent=2)
 
             self.index = index
         
@@ -97,6 +109,7 @@ class IndexService:
             stored_method = meta.get("method", "clip")
             if stored_method != self.method:
                 raise ValueError(f"Index was built with method '{stored_method}', but current method is '{self.method}'")
+            self._validate_index_metadata(meta)
         
         if self.method == "scan":
             if not os.path.exists(features_path):
@@ -106,6 +119,7 @@ class IndexService:
             if not os.path.exists(index_path):
                 raise FileNotFoundError("Index file not found.")
             self.index = faiss.read_index(index_path)
+            self._validate_loaded_index()
 
     def is_ready(self) -> bool:
         if self.method == "scan":
@@ -141,6 +155,11 @@ class IndexService:
             assert self.index is not None
             text_emb = self.encoder.encode_texts([query])
             query_vec = text_emb.numpy().astype(np.float32)
+            if query_vec.shape[1] != self.index.d:
+                raise ValueError(
+                    f"Query feature dimension {query_vec.shape[1]} does not match index dimension {self.index.d}. "
+                    f"Rebuild the '{self.method}' index with the same model you use at runtime."
+                )
             scores, indices = self.index.search(query_vec, top_k)
             results: List[SearchResult] = []
             for score, idx in zip(scores[0].tolist(), indices[0].tolist()):
@@ -151,6 +170,29 @@ class IndexService:
                 results.append(SearchResult(path=self.meta[idx], score=float(score), description=description, vector_summary=vector_summary))
         
         return results
+
+    def _validate_index_metadata(self, meta: Dict) -> None:
+        if self.method != "clip":
+            return
+
+        expected_model_name = getattr(self, "model_name", None)
+        stored_model_name = meta.get("model_name")
+        if stored_model_name and expected_model_name and stored_model_name != expected_model_name:
+            raise ValueError(
+                f"Index was built with model '{stored_model_name}', but runtime is using '{expected_model_name}'. "
+                "Set ITM_MODEL_NAME consistently and rebuild the index if needed."
+            )
+
+    def _validate_loaded_index(self) -> None:
+        if self.method != "clip" or self.index is None:
+            return
+
+        query_dim = self.encoder.get_feature_dim()
+        if query_dim != self.index.d:
+            raise ValueError(
+                f"Loaded index dimension {self.index.d} does not match runtime model output dimension {query_dim}. "
+                "This usually means the clip index was built with a different model."
+            )
 
     def _load_dataset_descriptions(self, csv_path: str) -> None:
         """从CSV文件加载图片描述映射"""

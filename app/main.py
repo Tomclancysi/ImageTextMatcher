@@ -11,7 +11,8 @@ def create_app() -> Flask:
     image_root = os.environ.get("ITM_IMAGE_ROOT", os.path.join(os.getcwd(), "data", "images"))
     index_dir = os.environ.get("ITM_INDEX_DIR", os.path.join(os.getcwd(), "data", "index"))
     dataset_csv = os.environ.get("ITM_DATASET_CSV", os.path.join(os.getcwd(), "data", "dataset_5000.csv"))
-    model_name = os.environ.get("ITM_MODEL_NAME", "openai/clip-vit-base-patch32")
+    model_name = os.environ.get("ITM_MODEL_NAME", "openai/clip-vit-large-patch14")
+    model_dtype = os.environ.get("ITM_MODEL_DTYPE", "fp16")
     default_method = os.environ.get("ITM_METHOD", "clip")
     vse_checkpoint = os.environ.get("ITM_VSE_CHECKPOINT", "data/checkpoints/vse_best.pt")
 
@@ -29,9 +30,19 @@ def create_app() -> Flask:
         saturation = 80
         lightness = int(40 + val * 20)
         return f"hsl({hue}, {saturation}%, {lightness}%)"
+
+    def compact_model_name(name: str) -> str:
+        return name.split("/")[-1] if "/" in name else name
     
     app.config["INDEX_SERVICES"] = {
-        "clip": IndexService(image_root=image_root, index_dir=index_dir, method="clip", model_name=model_name, dataset_csv=dataset_csv),
+        "clip": IndexService(
+            image_root=image_root,
+            index_dir=index_dir,
+            method="clip",
+            model_name=model_name,
+            dataset_csv=dataset_csv,
+            model_dtype=model_dtype,
+        ),
         "vse": IndexService(
             image_root=image_root,
             index_dir=index_dir,
@@ -74,6 +85,8 @@ def create_app() -> Flask:
             current_top_k=current_top_k,
             current_method=current_method,
             initial_query=initial_query,
+            clip_model_name=model_name,
+            clip_model_label=compact_model_name(model_name),
         )
 
     @app.post("/search")

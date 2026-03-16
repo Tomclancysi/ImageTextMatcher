@@ -18,9 +18,10 @@ def main():
     parser.add_argument("--method", choices=["clip", "vse", "scan"], default="clip",
                        help="Matching method: clip, vse, or scan")
     parser.add_argument("--model_name", default="openai/clip-vit-base-patch32",
-                       help="Model name (only used for CLIP method)")
+                       help="Dual-encoder model name for the clip method, e.g. openai/clip-vit-large-patch14 or google/siglip2-base-patch16-224")
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--vse_checkpoint", help="Checkpoint path for a trained VSE++ model")
+    parser.add_argument("--model_dtype", help="Optional model dtype for the clip method: fp16, bf16, or fp32")
     args = parser.parse_args()
 
     os.makedirs(args.index_dir, exist_ok=True)
@@ -30,6 +31,7 @@ def main():
         method=args.method,
         model_name=args.model_name,
         vse_checkpoint=args.vse_checkpoint,
+        model_dtype=args.model_dtype,
     )
     service.build_index(batch_size=args.batch_size)
     print(f"Index built using {args.method.upper()} method. Images: {len(service.meta)} -> {args.index_dir}")

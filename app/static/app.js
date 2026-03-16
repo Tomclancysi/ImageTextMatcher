@@ -3,8 +3,9 @@
 
   const config = window.__ITM_CONFIG__ || {};
   const HISTORY_KEY = "itm-search-history";
+  const clipModelLabel = config.clipModelLabel || "CLIP";
   const methods = [
-    { value: "clip", label: "CLIP" },
+    { value: "clip", label: clipModelLabel },
     { value: "vse", label: "VSE++" },
     { value: "scan", label: "SCAN" },
   ];

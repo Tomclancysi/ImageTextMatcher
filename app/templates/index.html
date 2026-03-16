@@ -451,7 +451,9 @@
       window.__ITM_CONFIG__ = {
         initialQuery: {{ initial_query|tojson }},
         currentTopK: {{ current_top_k|tojson }},
-        currentMethod: {{ current_method|tojson }}
+        currentMethod: {{ current_method|tojson }},
+        clipModelName: {{ clip_model_name|tojson }},
+        clipModelLabel: {{ clip_model_label|tojson }}
       };
     </script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
